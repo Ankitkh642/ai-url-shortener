@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  # Main application
+  url-shortener:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - MONGODB_URI=mongodb://mongodb:27017/url-shortener
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=your-super-secret-jwt-key-change-this
+      - BASE_URL=http://localhost:3000
+      - LOG_LEVEL=info
+    depends_on:
+      - mongodb
+      - redis
+    restart: unless-stopped
+    networks:
+      - app-network
+    volumes:
+      - ./logs:/app/logs
+
+  # MongoDB database
+  mongodb:
+    image: mongo:6.0
+    restart: unless-stopped
+    environment:
+      - MONGO_INITDB_DATABASE=url-shortener
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    networks:
+      - app-network
+
+  # Redis cache
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass ""
+    volumes:
+      - redis_data:/data
+    networks:
+      - app-network
+
+  # MongoDB Express (optional - for database management)
+  mongo-express:
+    image: mongo-express:latest
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=mongodb
+      - ME_CONFIG_MONGODB_PORT=27017
+      - ME_CONFIG_MONGODB_ENABLE_ADMIN=true
+      - ME_CONFIG_BASICAUTH_USERNAME=admin
+      - ME_CONFIG_BASICAUTH_PASSWORD=admin123
+    depends_on:
+      - mongodb
+    networks:
+      - app-network
+
+  # Redis Commander (optional - for Redis management)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    restart: unless-stopped
+    ports:
+      - "8082:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    depends_on:
+      - redis
+    networks:
+      - app-network
+
+  # Nginx reverse proxy (optional)
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - url-shortener
+    networks:
+      - app-network
+
+volumes:
+  mongodb_data:
+    driver: local
+  mongodb_config:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge 
